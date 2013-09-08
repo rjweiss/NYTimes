@@ -1,77 +1,68 @@
 import os, sys
 import json
-from collections import defaultdict, Counter
+from collections import defaultdict
 from lxml import etree
+import prettyprint
 
-workpath = '/Users/rweiss/Downloads/nytimes/1992/'
+def tree():
+    return defaultdict(tree)
 
-#taxonomic_classifiers = Counter()
+def inc(t):
+    if not t.has_key('size'):
+        t['size'] = 1
+    else:
+        t['size'] += 1
+                        
+def add(t, keys):
+    for key in keys:
+        inc(t)
+        t = t[key]
+    inc(t)
 
-classifier_tree = {}
 
-for root, dirs, infiles in os.walk(workpath):
-    for infile in infiles:
-        
-        if infile.endswith('.xml'):
-            fullpath = os.path.join(root, infile)
-            print fullpath
-        
-            tree = etree.parse(open(fullpath, 'rb'))
-            docroot = tree.getroot()
+def d3ify(key, val):
+    '''
+    takes tree nodes and returns in d3 format
+    '''
+    node = defaultdict()
+    node['name'] = key
+    node['children'] = [d3ify(k, v) for k, v in val.iteritems() if k != 'size']
+    
+    if val.has_key('size'):
+        node['size'] = val['size']
 
-            classifiers = docroot.findall('head/docdata/identified-content/classifier')
-#            classifier_attributes = [dict(el.attrib) for el in classifiers]
+    return node
+    
+def main():
+
+    workpath = '/Users/rweiss/Downloads/nytimes/1992/01/'
+    
+    classifier_tree = tree()
+
+    for root, dirs, infiles in os.walk(workpath):
+        for infile in infiles:
             
-            for el in classifiers:
+            if infile.endswith('.xml'):
+                fullpath = os.path.join(root, infile)
+            
+                parsetree = etree.parse(open(fullpath, 'rb'))
+                docroot = parsetree.getroot()
+    
+                classifiers = docroot.findall('head/docdata/identified-content/classifier')
                 
-                if el.attrib['type'] == 'taxonomic_classifier':
-                    children = classifier_tree
+                for el in classifiers:
                     
-                    #print 'root = ' + el.text
-                    
-                    for idx, val in enumerate(el.text.split('/')):
-                        #print val
-                        if val not in children.keys():
-                            children[val] = {}
-                            children[val]['name'] = val
-                            children[val]['size'] = 1
-                            children[val]['children'] = {}
-                        else:
-                            children[val]['size'] = children[val]['size'] + 1
-                        children = children[val]['children']
-                       
-#                    taxonomic_classifiers[el.text] += 1
-                    #break
-        #break
-        
-import sys
+                    if el.attrib['type'] == 'taxonomic_classifier':
+                        #with open('teststring.txt', 'a') as outfile:
+                        #    writeline = el.text + '\n'
+                        #    outfile.write(writeline)
+                        keys = el.text.split('/')
+                        add(classifier_tree, keys)
+     
+    d3ified_tree = d3ify('', classifier_tree)
 
-f = open('data1992.json', 'w')
-
-def pad(n):
-    for i in range(0, n):
-        f.write(' ') 
-
-
-def traverse(node, indent):
-    numKeys = len(node.keys())
-    i = 0
-    for el in node.keys():
-        pad(indent)
-        f.write('{ "name": "' + el + '", "size": %d' % node[el]['size'])
-        if len(node[el]['children']) > 0:
-            f.write(', "children": [ \n')
-            traverse(node[el]['children'], indent + 4)
-            pad(indent)
-            f.write(']}')
-        else:
-            f.write(' }')
-
-        i += 1
-        if i < numKeys:
-            f.write(',')
-        f.write('\n')
-            
-traverse(classifier_tree, 0)
-
-f.close()
+    with open(os.path.join(workpath +  'testdata.json'), 'w') as outfile:
+        json.dump(d3ified_tree, outfile)
+    
+if __name__ == '__main__':
+    main()
